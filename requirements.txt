@@ -1,0 +1,5 @@
+torch
+torchaudio
+pytorch-lightning
+einops
+easydict
