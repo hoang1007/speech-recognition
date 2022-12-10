@@ -284,7 +284,7 @@ class Wav2Vec2PretrainingModule(LightningModule):
 
         self.train_loss(loss)
 
-        if self.global_step % self.log_every_n_steps == 0:
+        if batch_idx % 100 == 0:
             self.log("train/loss", self.train_loss, on_step=True, on_epoch=True)
 
         return loss
