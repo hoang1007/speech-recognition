@@ -5,6 +5,7 @@ from typing import Tuple, Optional
 import torch
 from pytorch_lightning import LightningModule
 import einops
+from torchmetrics import MeanMetric
 
 from modules import (
     ContextEncoder,
@@ -25,6 +26,8 @@ class Wav2Vec2PretrainingModule(LightningModule):
         self.context_encoder = ContextEncoder(config.context_encoder)
         self.feature_extractor = FeatureExtractor(config.feature_extractor)
         self.quantizer = QuantizationModule(config.quantizer)
+
+        self.train_loss = MeanMetric()
 
     def forward(self, waveforms: Tuple[torch.Tensor, ...]):
         """
@@ -275,3 +278,16 @@ class Wav2Vec2PretrainingModule(LightningModule):
         )
 
         return mask
+
+    def training_step(self, batch, batch_idx):
+        loss = self(batch)
+
+        self.train_loss(loss)
+
+        if self.global_step % self.log_every_n_steps == 0:
+            self.log("train/loss", self.train_loss, on_step=True, on_epoch=True)
+
+        return loss
+
+    def configure_optimizers(self):
+        return torch.optim.AdamW(self.parameters(), lr=1e-4)
