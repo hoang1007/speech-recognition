@@ -7,13 +7,13 @@ from pytorch_lightning import LightningModule
 import einops
 from torchmetrics import MeanMetric
 
-from modules import (
+from .modules import (
     ContextEncoder,
     FeatureExtractor,
     QuantizationModule,
     Wav2Vec2Processor,
 )
-from utils import init_module_weights
+from src.utils import init_module_weights
 
 
 class Wav2Vec2PretrainingModule(LightningModule):

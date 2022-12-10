@@ -1,1 +1,1 @@
-from .vlsp2020 import VLSP2020DataModule, WebDatasetConverter, VLSP2020Dataset
+from .vlsp2020 import VLSP2020ForPretrainingDataModule, WebDatasetConverter, VLSP2020Dataset
