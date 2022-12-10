@@ -11,3 +11,4 @@ waveforms = (
 )
 
 loss = model(waveforms)
+print(loss)

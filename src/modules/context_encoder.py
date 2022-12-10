@@ -141,7 +141,7 @@ class ContextEncoder(nn.Module):
             # (batch, 1, num_frames, num_frames)
             # mask = mask[:, None, None, :].repeat(1, 1, mask.size(1), 1) # TODO: check this
             attention_mask = (
-                torch.maximum(attention_mask, attention_mask.transpose(2, 3)) * 1e-6
+                torch.maximum(attention_mask, attention_mask.transpose(2, 3)) * -1e6
             )
 
         x = self.encoder(x, mask=attention_mask)

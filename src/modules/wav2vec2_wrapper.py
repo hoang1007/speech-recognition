@@ -4,14 +4,14 @@ A wrapper of Wav2Vec2 for training phase.
 from typing import Tuple, Optional
 import torch
 from pytorch_lightning import LightningModule
+import einops
+
 from modules import (
     ContextEncoder,
     FeatureExtractor,
     QuantizationModule,
     Wav2Vec2Processor,
 )
-import einops
-
 from utils import init_module_weights
 
 
