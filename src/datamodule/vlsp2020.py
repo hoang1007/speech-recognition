@@ -1,5 +1,5 @@
 import os
-import json
+import torch
 import torchaudio
 import torchaudio.functional as F
 from torch.utils.data import Dataset, DataLoader, random_split
@@ -120,8 +120,18 @@ class VLSP2020ForPretrainingDataModule(LightningDataModule):
 
     @staticmethod
     def collate_fn(batch):
-        # item[1] is audio
-        audio = tuple(item[1] for item in batch)
+        def get_audio(item):
+            audio = item[1]
+
+            assert (
+                isinstance(audio, torch.Tensor)
+                and audio.ndim == 2
+                and audio.size(0) == 1
+            )
+
+            return audio.squeeze(0)
+
+        audio = tuple(get_audio(item) for item in batch)
 
         return audio
 
