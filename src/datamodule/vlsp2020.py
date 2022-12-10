@@ -89,7 +89,7 @@ class WebDatasetConverter:
 
     def get_dataset(self):
         return (
-            webdataset.WebDataset("data/vlsp2020.tar")
+            webdataset.WebDataset(self.outpath)
             .decode(
                 webdataset.handle_extension("txt", lambda x: x.decode("utf-8")),
                 webdataset.torch_audio,

@@ -21,6 +21,7 @@ if __name__ == "__main__":
             )
         ],
         gradient_clip_val=1.0,
+        accelerator="gpu"
     )
 
     trainer.fit(model, dtm)
