@@ -115,7 +115,8 @@ class VLSP2020ForPretrainingDataModule(LightningDataModule):
         self.save_hyperparameters()
 
     def setup(self, stage: str = None) -> None:
-        self.train_data, self.val_data = random_split(self.data, [600, 200])
+        # self.train_data, self.val_data = random_split(self.data, [600, 200])
+        self.train_data = self.data
 
     @staticmethod
     def collate_fn(batch):
@@ -128,25 +129,6 @@ class VLSP2020ForPretrainingDataModule(LightningDataModule):
         return DataLoader(
             self.train_data,
             batch_size=self.batch_size,
-            shuffle=True,
             num_workers=self.num_workers,
             collate_fn=self.collate_fn,
         )
-
-    def val_dataloader(self):
-        return DataLoader(
-            self.val_data,
-            batch_size=self.batch_size,
-            shuffle=False,
-            num_workers=self.num_workers,
-            collate_fn=self.collate_fn,
-        )
-
-
-dts = WebDatasetConverter("data/vlsp2020.tar").get_dataset()
-dtm = VLSP2020ForPretrainingDataModule(dts, batch_size=32, train_ratio=0.75)
-dtm.setup()
-
-for batch in dtm.train_dataloader():
-    print(batch)
-    break
