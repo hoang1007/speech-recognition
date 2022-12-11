@@ -4,7 +4,7 @@ import torch
 def init_module_weights(module):
     """Initialize the weights"""
 
-    from modules import QuantizationModule
+    from src.model.modules import QuantizationModule
 
     # gumbel softmax requires special init
     if isinstance(module, QuantizationModule):

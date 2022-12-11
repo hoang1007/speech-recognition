@@ -102,6 +102,7 @@ class VLSP2020ForPretrainingDataModule(LightningDataModule):
     def __init__(
         self,
         dataset: Dataset,
+        return_transcript: bool = False,
         batch_size: int = 32,
         train_ratio: str = 0.75,
         num_workers: int = 0,
@@ -111,6 +112,7 @@ class VLSP2020ForPretrainingDataModule(LightningDataModule):
         self.batch_size = batch_size
         self.train_ratio = train_ratio
         self.num_workers = num_workers
+        self.return_transcript = return_transcript
 
         self.save_hyperparameters()
 
@@ -118,8 +120,7 @@ class VLSP2020ForPretrainingDataModule(LightningDataModule):
         # self.train_data, self.val_data = random_split(self.data, [600, 200])
         self.train_data = self.data
 
-    @staticmethod
-    def collate_fn(batch):
+    def collate_fn(self, batch):
         def get_audio(item):
             audio = item[1]
 
@@ -133,7 +134,12 @@ class VLSP2020ForPretrainingDataModule(LightningDataModule):
 
         audio = tuple(get_audio(item) for item in batch)
 
-        return audio
+        if self.return_transcript:
+            transcript = tuple(item[0] for item in batch)
+
+            return transcript, audio
+        else:
+            return audio
 
     def train_dataloader(self):
         return DataLoader(
