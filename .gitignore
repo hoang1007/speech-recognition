@@ -131,3 +131,6 @@ dmypy.json
 # Ignore data
 data/*
 !*/.gitkeep
+
+# Ignore loggers
+wandb/
