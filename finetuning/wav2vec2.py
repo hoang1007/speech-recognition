@@ -23,7 +23,7 @@ class SpeechRecognizer(LightningModule):
     ):
         super().__init__()
 
-        self.hidden_size = wav2vec2.config.hidden_size
+        self.hidden_size = wav2vec2.config.proj_codevector_dim
         self.vocab_size = tokenizer.vocab_size
 
         self.wav2vec2 = wav2vec2
