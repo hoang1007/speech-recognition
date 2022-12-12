@@ -1,8 +1,10 @@
+from typing import Callable, Optional, Union
+from tqdm import tqdm
 import os
 import torch
 import torchaudio
 import torchaudio.functional as F
-from torch.utils.data import Dataset, DataLoader, random_split
+from torch.utils.data import Dataset, DataLoader, IterableDataset, random_split
 from pytorch_lightning import LightningDataModule
 import webdataset
 
@@ -62,18 +64,14 @@ class VLSP2020Dataset(Dataset):
         return transcript, audio
 
 
-class WebDatasetConverter:
+class VLSP2020TarDataset:
     def __init__(self, outpath: str):
         self.outpath = outpath
 
-    def convert(self, *args, **kwargs):
-        import sys
-
-        self.dts = VLSP2020Dataset(*args, **kwargs)
-
+    def convert(self, dataset: VLSP2020Dataset):
         writer = webdataset.TarWriter(self.outpath)
 
-        for idx, (transcript, audio) in enumerate(self.dts):
+        for idx, (transcript, audio) in enumerate(tqdm(dataset, colour="green")):
             writer.write(
                 {
                     "__key__": f"{idx:08d}",
@@ -82,13 +80,10 @@ class WebDatasetConverter:
                 }
             )
 
-            if idx % 1000 == 0:
-                print(f"{idx:6d}", end="\r", flush=True, file=sys.stderr)
-
         writer.close()
 
-    def get_dataset(self):
-        return (
+    def load(self) -> webdataset.WebDataset:
+        self.data = (
             webdataset.WebDataset(self.outpath)
             .decode(
                 webdataset.handle_extension("txt", lambda x: x.decode("utf-8")),
@@ -97,30 +92,17 @@ class WebDatasetConverter:
             .to_tuple("txt", "pth")
         )
 
+        return self.data
 
-class VLSP2020ForPretrainingDataModule(LightningDataModule):
-    def __init__(
-        self,
-        dataset: Dataset,
-        return_transcript: bool = False,
-        batch_size: int = 32,
-        train_ratio: str = 0.75,
-        num_workers: int = 0,
-    ):
-        super().__init__()
-        self.data = dataset
-        self.batch_size = batch_size
-        self.train_ratio = train_ratio
-        self.num_workers = num_workers
-        self.return_transcript = return_transcript
 
-        self.save_hyperparameters()
-
-    def setup(self, stage: str = None) -> None:
-        # self.train_data, self.val_data = random_split(self.data, [600, 200])
-        self.train_data = self.data
-
-    def collate_fn(self, batch):
+def get_dataloader(
+    dataset: Union[VLSP2020Dataset, webdataset.WebDataset],
+    return_transcript: bool = False,
+    target_transform: Optional[Callable] = None,
+    batch_size: int = 32,
+    num_workers: int = 2,
+):
+    def collate_fn(batch):
         def get_audio(item):
             audio = item[1]
 
@@ -134,17 +116,16 @@ class VLSP2020ForPretrainingDataModule(LightningDataModule):
 
         audio = tuple(get_audio(item) for item in batch)
 
-        if self.return_transcript:
-            transcript = tuple(item[0] for item in batch)
+        if return_transcript:
+            if target_transform is not None:
+                transcript = tuple(target_transform(item[0]) for item in batch)
+            else:
+                transcript = tuple(item[0] for item in batch)
 
             return transcript, audio
         else:
             return audio
 
-    def train_dataloader(self):
-        return DataLoader(
-            self.train_data,
-            batch_size=self.batch_size,
-            num_workers=self.num_workers,
-            collate_fn=self.collate_fn,
-        )
+    return DataLoader(
+        dataset, batch_size=batch_size, num_workers=num_workers, collate_fn=collate_fn
+    )

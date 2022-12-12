@@ -1,1 +1,4 @@
-from .vlsp2020 import VLSP2020ForPretrainingDataModule, WebDatasetConverter, VLSP2020Dataset
+from .vlsp2020 import (
+    VLSP2020TarDataset,
+    VLSP2020Dataset,
+)
