@@ -1,4 +1,4 @@
-from typing import Tuple
+from typing import Tuple, Union
 import re
 
 
@@ -34,32 +34,39 @@ def levenshtein_distance(source: Tuple[str], target: Tuple[str]):
     return distance
 
 
-def word_error_rate(prediction: str, transcript: str):
+def word_error_rate(
+    predicted: Union[str, Tuple[str]], transcript: Union[str, Tuple[str]]
+):
+    if isinstance(predicted, str):
+        predicted = (predicted,)
+    if isinstance(transcript, str):
+        transcript = (transcript,)
+
     pattern = r"\W+"
 
-    prediction = re.split(pattern, prediction)
-    transcript = re.split(pattern, transcript)
+    err, total = 0, 0
 
-    return levenshtein_distance(prediction, transcript) / len(transcript)
+    for pred, tgt in zip(predicted, transcript):
+        pred_tokens = re.split(pattern, pred)
+        tgt_tokens = re.split(pattern, tgt)
+        err += levenshtein_distance(pred_tokens, tgt_tokens)
+        total += len(tgt_tokens)
 
-
-def character_error_rate(prediction: str, transcript: str):
-    return levenshtein_distance(prediction, transcript) / len(transcript)
-
-
-def batch_wer(predictions: Tuple[str], transcipts: Tuple[str]):
-    wer = 0
-
-    for pred, trans in zip(predictions, transcipts):
-        wer += word_error_rate(pred, trans)
-
-    return wer / len(transcipts)
+    return err / total
 
 
-def batch_cer(predictions: Tuple[str], transcipts: Tuple[str]):
-    cer = 0
+def character_error_rate(
+    predicted: Union[str, Tuple[str]], transcript: Union[str, Tuple[str]]
+):
+    if isinstance(predicted, str):
+        predicted = (predicted,)
+    if isinstance(transcript, str):
+        transcript = (transcript,)
 
-    for pred, trans in zip(predictions, transcipts):
-        cer += character_error_rate(pred, trans)
+    err, total = 0, 0
 
-    return cer / len(transcipts)
+    for pred, tgt in zip(predicted, transcript):
+        err += levenshtein_distance(pred, tgt)
+        total += len(tgt)
+
+    return err / total

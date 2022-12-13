@@ -8,7 +8,7 @@ from transformers import (
     Wav2Vec2FeatureExtractor,
 )
 
-from src.utils.metrics import batch_wer, batch_cer
+from src.utils.metrics import character_error_rate, word_error_rate
 from src.utils.scheduler import TriStateScheduler
 
 
@@ -73,36 +73,23 @@ class SpeechRecognizer(LightningModule):
         # logits.shape == (batch_size, sequence_length, vocab_size)
         logits = self.fc(hidden_states)
 
-        if transcripts is not None:
-            # get the length of valids sequence
-            input_lengths = self.wav2vec2._get_feat_extract_output_lengths(
-                attention_mask.sum(-1)
-            ).long()
+        # get the length of valids sequence
+        input_lengths = self.wav2vec2._get_feat_extract_output_lengths(
+            attention_mask.sum(-1)
+        ).long()
 
+        if transcripts is not None:
             # tokenize transcripts
             target_ids, target_lengths = self.tokenizer(
                 transcripts,
                 padding=True,
                 return_length=True,
                 return_attention_mask=False,
-                return_tensors="pt"
+                return_tensors="pt",
             ).values()
 
             target_ids = target_ids.to(self.device)
             target_lengths = target_lengths.to(self.device)
-
-            # target_ids, target_mask = self.tokenizer(
-            #     transcripts,
-            #     padding=True,
-            #     return_length=False,
-            #     return_attention_mask=True,
-            #     return_tensors="pt",
-            # ).values()
-
-            # target_ids = target_ids.to(self.device)
-            # target_mask = target_mask.to(self.device).bool()
-            # target_lengths = target_mask.sum(-1)
-            # target_ids = target_ids.masked_select(target_mask)
 
             # (batch_size, sequence_length, vocab_size) -> (sequence_length, batch_size, vocab_size)
             log_probs = torch.nn.functional.log_softmax(logits, dim=-1).transpose(0, 1)
@@ -110,18 +97,34 @@ class SpeechRecognizer(LightningModule):
             # compute loss
             loss = self.criterion(log_probs, target_ids, input_lengths, target_lengths)
 
-            return loss, logits
+            return loss, logits, input_lengths
         else:
-            return logits
+            return logits, input_lengths
+
+    @staticmethod
+    def _get_predicted_ids(logits: torch.Tensor, lengths: torch.Tensor):
+        # logits.shape == (batch_size, sequence_length, vocab_size)
+        # lengths.shape == (batch_size, )
+
+        # get the max value of logits
+        predicted_ids = torch.argmax(logits, dim=-1)
+
+        # remove the padding
+        predicted_ids = [
+            predicted_id[:length]
+            for predicted_id, length in zip(predicted_ids, lengths)
+        ]
+
+        return predicted_ids
 
     def training_step(self, batch, batch_idx):
         transcripts, waveforms = batch
 
-        loss, _ = self(waveforms, transcripts)
+        loss = self(waveforms, transcripts)[0]
 
         self.train_loss(loss)
 
-        if batch_idx % 100 == 0:
+        if self.global_step % 500 == 0:
             self.log("train/loss", self.train_loss, on_step=True, on_epoch=True)
 
         return loss
@@ -132,14 +135,15 @@ class SpeechRecognizer(LightningModule):
     def validation_step(self, batch, batch_idx):
         transcripts, waveforms = batch
 
-        logits = self(waveforms)
+        logits, seq_lengths = self(waveforms)
 
-        predicted_ids = torch.argmax(logits, dim=-1).cpu().numpy()
+        predicted_ids = self._get_predicted_ids(logits, seq_lengths)
+        predicted_texts = self.tokenizer.batch_decode(
+            predicted_ids, skip_special_tokens=True
+        )
 
-        predicted_texts = self.tokenizer.batch_decode(predicted_ids)
-
-        wer = batch_wer(predicted_texts, transcripts)
-        cer = batch_cer(predicted_texts, transcripts)
+        wer = word_error_rate(predicted_texts, transcripts)
+        cer = character_error_rate(predicted_texts, transcripts)
 
         self.log("val/wer", wer, on_epoch=True)
         self.log("val/cer", cer, on_epoch=True)

@@ -1,5 +1,5 @@
 import sys
-sys.path.append("..")
+sys.path.append(".")
 
 from argparse import ArgumentParser
 import os, string
@@ -75,8 +75,8 @@ def main():
     parser.add_argument("--warmup_steps", type=float, default=0.1)
     parser.add_argument("--constant_steps", type=float, default=0.4)
     parser.add_argument("--scheduler_factor", type=float, default=1e-3)
-    parser.add_argument("--data_dir", type=str)
-    parser.add_argument("--ckpt_dir", type=str)
+    parser.add_argument("--data_dir", type=str, default="data")
+    parser.add_argument("--ckpt_dir", type=str, default="ckpt")
     parser.add_argument("--ckpt_path", type=str, default=None)
 
     args = parser.parse_args()
