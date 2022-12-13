@@ -152,10 +152,16 @@ class SpeechRecognizer(LightningModule):
         wer = word_error_rate(predicted_texts, transcripts)
         cer = character_error_rate(predicted_texts, transcripts)
 
+        return wer, cer
+
+    def validation_epoch_end(self, outputs):
+        wer, cer = zip(*outputs)
+
+        wer = sum(wer) / len(wer)
+        cer = sum(cer) / len(cer)
+
         self.log("val/wer", wer, on_epoch=True)
         self.log("val/cer", cer, on_epoch=True)
-
-        return wer, cer
 
     def configure_optimizers(self):
         optimizer = torch.optim.AdamW(

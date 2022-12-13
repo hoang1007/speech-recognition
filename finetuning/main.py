@@ -1,4 +1,5 @@
 import sys
+
 sys.path.append("..")
 
 from argparse import ArgumentParser
@@ -110,7 +111,13 @@ def main():
     trainer = Trainer(
         accelerator=args.accelerator,
         callbacks=[
-            ModelCheckpoint(args.ckpt_dir, monitor="val/wer", mode="min", save_top_k=1),
+            ModelCheckpoint(
+                args.ckpt_dir,
+                monitor="val/wer",
+                mode="min",
+                save_top_k=1,
+                save_last=True,
+            ),
             LearningRateMonitor(logging_interval="step"),
         ],
         logger=WandbLogger(project="Wav2Vec2", resume=True),
