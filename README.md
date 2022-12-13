@@ -2,7 +2,7 @@
 This repository contains a implementation of Wav2Vec2 and also provide codes for fine-tuning on [Wav2Vec2-base of Vietnamese](https://huggingface.co/nguyenvulebinh/wav2vec2-base-vi).
 
 # Inference
-Please view [this notebook](finetuning/test.ipynb)
+Please view [this notebook](https://colab.research.google.com/drive/1YfAWQCiQzSHyJsGiOhaMBM7Wi3Ncqjes?usp=sharing)
 
 # Prepare Dataset
 The code is fine-tunned on [VLSP2020 Dataset](https://institute.vinbigdata.org/events/vinbigdata-chia-se-100-gio-du-lieu-tieng-noi-cho-cong-dong/) <br>
