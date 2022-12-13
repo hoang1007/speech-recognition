@@ -8,6 +8,7 @@ from transformers import (
     Wav2Vec2CTCTokenizer,
     Wav2Vec2FeatureExtractor,
 )
+from pytorch_lightning import seed_everything
 from pytorch_lightning import Trainer
 from pytorch_lightning.callbacks import ModelCheckpoint, LearningRateMonitor
 from pytorch_lightning.loggers import WandbLogger
@@ -78,6 +79,7 @@ def main():
     parser.add_argument("--data_dir", type=str, default="data")
     parser.add_argument("--ckpt_dir", type=str, default="ckpt")
     parser.add_argument("--ckpt_path", type=str, default=None)
+    parser.add_argument("--detect_anomaly", type=bool, default=False)
 
     args = parser.parse_args()
     print(args)
@@ -110,12 +112,14 @@ def main():
             ModelCheckpoint(args.ckpt_dir, monitor="val/wer", mode="min", save_top_k=1),
             LearningRateMonitor(logging_interval="step"),
         ],
-        logger=WandbLogger(project="Wav2Vec2"),
+        logger=WandbLogger(project="Wav2Vec2", resume=True),
         max_epochs=args.max_epochs,
+        detect_anomaly=args.detect_anomaly,
     )
 
     trainer.fit(model, train_loader, val_loader)
 
 
 if __name__ == "__main__":
+    seed_everything(188)
     main()
