@@ -163,6 +163,17 @@ class SpeechRecognizer(LightningModule):
         self.log("val/wer", wer, on_epoch=True)
         self.log("val/cer", cer, on_epoch=True)
 
+    @torch.no_grad()
+    def predict(self, waveforms: Tuple[torch.Tensor]):
+        logits, seq_lengths = self(waveforms)
+
+        predicted_ids = self._get_predicted_ids(logits, seq_lengths)
+        predicted_texts = self.tokenizer.batch_decode(
+            predicted_ids, skip_special_tokens=True
+        )
+
+        return predicted_texts
+
     def configure_optimizers(self):
         optimizer = torch.optim.AdamW(
             params=[

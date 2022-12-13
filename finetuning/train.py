@@ -82,6 +82,7 @@ def main():
     parser.add_argument("--ckpt_path", type=str, default=None)
     parser.add_argument("--detect_anomaly", type=bool, default=False)
     parser.add_argument("--grad_clip", type=float, default=None)
+    parser.add_argument("--wandb_id", type=str, default=None)
 
     args = parser.parse_args()
     print(args)
@@ -120,7 +121,7 @@ def main():
             ),
             LearningRateMonitor(logging_interval="step"),
         ],
-        logger=WandbLogger(project="Wav2Vec2", resume=True),
+        logger=WandbLogger(project="Wav2Vec2", id=args.wandb_id),
         max_epochs=args.max_epochs,
         detect_anomaly=args.detect_anomaly,
         gradient_clip_val=args.grad_clip,

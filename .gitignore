@@ -134,3 +134,7 @@ data/*
 
 # Ignore loggers
 wandb/
+lightning_logs/
+
+# Ignore checkpoints
+checkpoints/
