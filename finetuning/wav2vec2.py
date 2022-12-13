@@ -41,7 +41,7 @@ class SpeechRecognizer(LightningModule):
             torch.nn.Linear(self.hidden_size // 2, self.vocab_size),
         )
 
-        self.criterion = torch.nn.CTCLoss(blank=tokenizer.pad_token_id)
+        self.criterion = torch.nn.CTCLoss(blank=tokenizer.pad_token_id, zero_infinity=True)
 
         self.train_loss = MeanMetric()
 
@@ -89,7 +89,14 @@ class SpeechRecognizer(LightningModule):
             ).values()
 
             target_ids = target_ids.to(self.device)
+            assert (
+                target_ids < self.tokenizer.vocab_size
+            ).all(), "target_ids is out of range"
+
             target_lengths = target_lengths.to(self.device)
+            assert (
+                target_lengths <= logits.size(1)
+            ).all(), "target_lengths is out of range"
 
             # (batch_size, sequence_length, vocab_size) -> (sequence_length, batch_size, vocab_size)
             log_probs = torch.nn.functional.log_softmax(logits, dim=-1).transpose(0, 1)

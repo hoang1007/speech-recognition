@@ -80,6 +80,7 @@ def main():
     parser.add_argument("--ckpt_dir", type=str, default="ckpt")
     parser.add_argument("--ckpt_path", type=str, default=None)
     parser.add_argument("--detect_anomaly", type=bool, default=False)
+    parser.add_argument("--grad_clip", type=float, default=None)
 
     args = parser.parse_args()
     print(args)
@@ -115,6 +116,7 @@ def main():
         logger=WandbLogger(project="Wav2Vec2", resume=True),
         max_epochs=args.max_epochs,
         detect_anomaly=args.detect_anomaly,
+        gradient_clip_val=args.grad_clip,
     )
 
     trainer.fit(model, train_loader, val_loader)
