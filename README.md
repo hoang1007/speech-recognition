@@ -1,9 +1,6 @@
 # Wav2Vec2.0 ASR
 This repository contains a implementation of Wav2Vec2 and also provide codes for fine-tuning on [Wav2Vec2-base of Vietnamese](https://huggingface.co/nguyenvulebinh/wav2vec2-base-vi).
 
-# Inference
-Please view [this notebook](https://colab.research.google.com/drive/1YfAWQCiQzSHyJsGiOhaMBM7Wi3Ncqjes?usp=sharing)
-
 # Prepare Dataset
 The code is fine-tunned on [VLSP2020 Dataset](https://institute.vinbigdata.org/events/vinbigdata-chia-se-100-gio-du-lieu-tieng-noi-cho-cong-dong/) <br>
 Since I mainly train on Google Colab, so I need to convert this dataset to [Web Dataset](https://github.com/webdataset/webdataset) for faster loading from Google Drive
@@ -16,7 +13,7 @@ where:
 - `DEST_DIR`: The directory where data is extracted in
 
 # Fine-tuning
-You can view my fine-tuning on [Google Colab](https://colab.research.google.com/drive/100sQIoLLHViHazfeqNnslBUtOpvejKtA?usp=sharing) and [WandB](https://wandb.ai/hoang1007/Wav2Vec2?workspace=user-hoang1007)
+You can view my fine-tuning in [this notebook](./notebooks/finetuning.ipynb) and [WandB](https://wandb.ai/hoang1007/Wav2Vec2?workspace=user-hoang1007)
 ```bash
 cd finetuning
 python train.py \
@@ -33,3 +30,6 @@ python train.py \
 where:
 - `DATA_DIR`: The directory that contains extracted data
 - `CKPT_DIR`: The directory that checkpoint would be saved
+
+# Inference
+Please view [this notebook](./notebooks/test.ipynb)

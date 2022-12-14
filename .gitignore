@@ -137,4 +137,4 @@ wandb/
 lightning_logs/
 
 # Ignore checkpoints
-checkpoints/
+checkpoints/*.ckpt
