@@ -16,7 +16,7 @@ where:
 - `DEST_DIR`: The directory where data is extracted in
 
 # Fine-tuning
-You can view my fine-tuning in [this notebook](./notebooks/finetuning.ipynb) and [WandB](https://wandb.ai/hoang1007/Wav2Vec2?workspace=user-hoang1007)
+You can view my fine-tuning in [this notebook](./notebooks/) and [WandB](https://wandb.ai/hoang1007/Wav2Vec2?workspace=user-hoang1007)
 ```bash
 cd finetuning
 python train.py \
@@ -35,4 +35,4 @@ where:
 - `CKPT_DIR`: The directory that checkpoint would be saved
 
 # Inference
-Please view [this notebook](./notebooks/test.ipynb)
+Please view [this notebook](./notebooks/)
