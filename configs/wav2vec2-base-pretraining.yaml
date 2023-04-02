@@ -1,0 +1,43 @@
+model:
+  feature_extractor:
+    in_channels: 1
+    hidden_channels: [512, 512, 512, 512, 512, 512, 512]
+    kernel_sizes: [10, 3, 3, 3, 3, 2, 2]
+    strides: [5, 2, 2, 2, 2, 2, 2]
+  context_encoder:
+    d_model: 768
+    feature_projection:
+      in_features: 512
+      dropout: 0.1
+    transformer_encoder:
+      pos_embedding:
+        kernel_size: 3
+        groups: 2
+      enc_layer:
+        num_heads: 8
+        layer_norm_first: False
+        feed_forward_dim: 2048
+        dropout: 0.1
+      num_enc_layers: 12
+      layer_drop_prob: 0.05
+      dropout: 0.1
+  quantizer:
+    in_features: 512
+    num_codebooks: 2
+    num_codewords: 320
+    d_model: 768
+  train_cfg:
+    mask_prob: 0.65
+    mask_length: 10
+    min_masks: 2
+    num_negatives: 100
+    contrastive_logits_temperature: 0.1
+    diversity_loss_weight: 0.2
+  optimizer:
+    _target_: torch.optim.Adam
+    lr: 0.1
+    weight_decay: 0.0001
+  lr_scheduler:
+    scheduler:
+      _target_: torch.optim.lr_scheduler.CosineAnnealingLR
+      T_max: 20

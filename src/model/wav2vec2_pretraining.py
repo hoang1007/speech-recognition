@@ -1,7 +1,8 @@
 """
 A wrapper of Wav2Vec2 for training phase.
 """
-from typing import Tuple, Optional
+from typing import Tuple, List, Optional
+from omegaconf import DictConfig
 import torch
 from pytorch_lightning import LightningModule
 import einops
@@ -13,23 +14,66 @@ from .modules import (
     QuantizationModule,
     Wav2Vec2Processor,
 )
-from src.utils import init_module_weights
+from src.utils import init_module_weights, instantiate
 
 
-class Wav2Vec2PretrainingModule(LightningModule):
-    def __init__(self, config):
+class Wav2Vec2(LightningModule):
+    def __init__(
+        self,
+        feature_extractor: DictConfig,
+        context_encoder: DictConfig,
+        quantizer: Optional[DictConfig] = None,
+        optimizer: Optional[DictConfig] = None,
+        lr_scheduler: Optional[DictConfig] = None,
+        train_cfg: Optional[DictConfig] = None,
+    ):
         super().__init__()
 
-        self.save_hyperparameters(config)
+        self.save_hyperparameters(logger=False)
 
         self.processor = Wav2Vec2Processor()
-        self.context_encoder = ContextEncoder(config.context_encoder)
-        self.feature_extractor = FeatureExtractor(config.feature_extractor)
-        self.quantizer = QuantizationModule(config.quantizer)
+        self.context_encoder = ContextEncoder(**context_encoder)
+        self.feature_extractor = FeatureExtractor(**feature_extractor)
+        if quantizer is not None:
+            self.quantizer = QuantizationModule(**quantizer)
+        else:
+            self.quantizer = None
+        self.train_cfg = train_cfg
 
+        self.optimizer = optimizer
+        self.lr_scheduler = lr_scheduler
         self.train_loss = MeanMetric()
 
-    def forward(self, waveforms: Tuple[torch.Tensor, ...]):
+    def init_weights(self):
+        init_module_weights(self.context_encoder)
+        init_module_weights(self.feature_extractor)
+
+    def forward(
+        self,
+        waveforms: List[torch.Tensor],
+        mask_time_indices: Optional[torch.Tensor] = None,
+    ):
+        """
+        Args:
+            waveforms (List[torch.Tensor]): List containing waveforms. Each waveform has shape: (wave_length,).
+
+        Returns:
+            torch.Tensor: The context features of waveforms. Shape: (batch_size, num_frames, hidden_size).
+            wave_lengths (torch.Tensor): The lengths of waveforms. Shape: (batch_size,).
+        """
+        waveforms, wave_lengths = self.processor(waveforms)
+
+        # features.shape == (batch_size, num_frames, hidden_size)
+        features, seq_lengths = self.feature_extractor(waveforms, wave_lengths)
+        attention_mask = self._compute_attention_mask(seq_lengths)
+
+        context_features = self.context_encoder(
+            features, attention_mask=attention_mask, mask_time_indices=mask_time_indices
+        )
+
+        return context_features, seq_lengths
+
+    def loss(self, waveforms: List[torch.Tensor]):
         """
         Args:
             waveforms (Tuple[torch.Tensor]): The waveforms. Shape: (batch_size, wave_length).
@@ -37,6 +81,9 @@ class Wav2Vec2PretrainingModule(LightningModule):
         Returns:
             loss: The loss of the model. Contrastive loss + Diversity loss.
         """
+        assert self.train_cfg is not None, "`train_cfg` is required for training phase."
+        assert self.quantizer is not None, "`quantizer` is required for training phase."
+
         waveforms, wave_lengths = self.processor(waveforms)
 
         # features.shape == (batch_size, num_frames, hidden_size)
@@ -45,11 +92,11 @@ class Wav2Vec2PretrainingModule(LightningModule):
         attention_mask = self._compute_attention_mask(num_frames)
         mask_time_indices = self._compute_mask_span(
             shape=features.shape[:-1],
-            mask_prob=self.hparams.mask_prob,
-            mask_length=self.hparams.mask_length,
+            mask_prob=self.train_cfg.mask_prob,
+            mask_length=self.train_cfg.mask_length,
             attention_mask=attention_mask,
             device=features.device,
-            min_masks=self.hparams.min_masks,
+            min_masks=self.train_cfg.min_masks,
         )
 
         context_features = self.context_encoder(
@@ -60,7 +107,7 @@ class Wav2Vec2PretrainingModule(LightningModule):
 
         negative_quantized_features = self._sample_negatives(
             quantized_features,
-            num_negatives=self.hparams.num_negatives,
+            num_negatives=self.train_cfg.num_negatives,
             attention_mask=attention_mask,
         )
 
@@ -69,7 +116,7 @@ class Wav2Vec2PretrainingModule(LightningModule):
             context_features,
             quantized_features,
             negative_quantized_features,
-            self.hparams.contrastive_logits_temperature,
+            self.train_cfg.contrastive_logits_temperature,
         ).flatten(0, -2)
 
         # compute contrastive loss
@@ -83,7 +130,7 @@ class Wav2Vec2PretrainingModule(LightningModule):
         # compute diversity loss
         diversity_loss = 1 - perplexity / self.quantizer.total_codewords
 
-        loss = contrastive_loss + diversity_loss * self.hparams.diversity_loss_weight
+        loss = contrastive_loss + diversity_loss * self.train_cfg.diversity_loss_weight
 
         return loss
 
@@ -113,11 +160,11 @@ class Wav2Vec2PretrainingModule(LightningModule):
             sampled_ids = []
 
             for batch_idx in range(batch_size):
-                num_valid_frames = (
+                num_valid_frames = int(
                     features.size(1)
                     if attention_mask is None
-                    else (1 - attention_mask[batch_idx].long()).sum()
-                ).item()
+                    else (~attention_mask[batch_idx]).sum().item()
+                )
 
                 sampled_ids.append(
                     torch.randint(
@@ -128,9 +175,8 @@ class Wav2Vec2PretrainingModule(LightningModule):
                     )
                 )
 
-            sampled_ids = torch.stack(
-                sampled_ids, dim=0
-            )  # (batch_size, num_frames * num_negatives)
+            # (batch_size, num_frames * num_negatives)
+            sampled_ids = torch.stack(sampled_ids, dim=0)
 
             feature_ids = einops.repeat(
                 torch.arange(num_frames, device=features.device),
@@ -268,7 +314,7 @@ class Wav2Vec2PretrainingModule(LightningModule):
         Returns:
             attention_mask (BoolTensor): The mask for the valid frames. `True` is invalid. Shape: (batch, num_frames)
         """
-        max_length = length.max().item()
+        max_length = int(length.max().item())
 
         mask = (
             torch.arange(max_length, device=length.device).expand(
@@ -280,7 +326,7 @@ class Wav2Vec2PretrainingModule(LightningModule):
         return mask
 
     def training_step(self, batch, batch_idx):
-        loss = self(batch)
+        loss = self.loss(batch)
 
         self.train_loss(loss)
 
@@ -290,4 +336,20 @@ class Wav2Vec2PretrainingModule(LightningModule):
         return loss
 
     def configure_optimizers(self):
-        return torch.optim.AdamW(self.parameters(), lr=1e-4)
+        if self.optimizer is not None:
+            optimizer = instantiate(self.optimizer, partial=True)(self.parameters())
+
+            if self.lr_scheduler is not None:
+                assert "scheduler" in self.lr_scheduler, "Please specify the scheduler."
+                scheduler = instantiate(self.lr_scheduler.pop("scheduler"), partial=True)(
+                    optimizer
+                )
+                return dict(
+                    optimizer=optimizer,
+                    lr_scheduler=dict(
+                        scheduler=scheduler,
+                        **self.lr_scheduler,
+                    ),
+                )
+            else:
+                return optimizer

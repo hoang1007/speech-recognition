@@ -1,4 +1,6 @@
 from typing import Optional
+from omegaconf import DictConfig
+
 import torch
 from torch import nn
 import torch.nn.functional as F
@@ -11,36 +13,34 @@ class FeatureProjection(nn.Module):
         Projects the extracted features to the encoder dimension.
 
         Args:
+            in_features (int): The number of input features.
+            out_features (int): The number of output features.
+            dropout (float): The dropout probability.
+        """
+        super().__init__()
+
+        self.layer_norm = nn.LayerNorm(in_features)
+        self.projection = nn.Linear(in_features, out_features)
+        self.dropout = nn.Dropout(dropout)
+
+    def forward(self, x: torch.Tensor):
+        """
+        Args:
             x (Tensor): The input features. Shape: (batch, num_frames, in_features)
 
         Returns:
             hiddens (Tensor): The latent features. Shape: (batch, num_frames, out_features)
         """
-        super().__init__()
-
-        self.projection = nn.Linear(in_features, out_features)
-        self.layernorm = nn.LayerNorm(in_features)
-        self.dropout = nn.Dropout(dropout)
-
-    def forward(self, x: torch.Tensor):
-
-        hiddens = self.layernorm(x)
+        x = self.layer_norm(x)
         hiddens = self.projection(x)
         hiddens = self.dropout(hiddens)
         return hiddens
 
 
-class RelativePositionalEmbedding(nn.Module):
+class RelativePositionalConvEmbedding(nn.Module):
     def __init__(
-        self, d_model: int, kernel_size: int, groups: int, dropout: float = 0.1
+        self, d_model: int, kernel_size: int, groups: int
     ):
-        """
-        Args:
-            x (Tensor): The extracted features. Shape: (batch, num_frames, d_model)
-
-        Returns:
-            out (Tensor): The output which encoded the relative positional information. Shape: (batch, num_frames, d_model)
-        """
         super().__init__()
 
         self.conv = nn.Conv1d(
@@ -50,15 +50,21 @@ class RelativePositionalEmbedding(nn.Module):
             padding=kernel_size // 2,
             groups=groups,
         )
-        self.dropout = nn.Dropout(dropout)
+        self.conv = nn.utils.weight_norm(self.conv, name="weight", dim=2) # type: ignore
         self.num_remove = 1 if kernel_size % 2 == 0 else 0
 
     def forward(self, x: torch.Tensor):
+        """
+        Args:
+            x (Tensor): The extracted features. Shape: (batch, num_frames, d_model)
+
+        Returns:
+            out (Tensor): The output which encoded the relative positional information. Shape: (batch, num_frames, d_model)
+        """
         # (batch, channels=d_model, num_frames)
         out = x.transpose(1, 2)
 
         out = self.conv(out)
-
         if self.num_remove > 0:
             out = out[..., : -self.num_remove]
 
@@ -66,14 +72,42 @@ class RelativePositionalEmbedding(nn.Module):
 
         # (batch, num_frames, channels=d_model)
         out = out.transpose_(1, 2)
-        out = out + x
-        out = self.dropout(out)
 
         return out
 
 
 class TranformerEncoder(nn.Module):
-    def __init__(self, config):
+    def __init__(
+        self,
+        d_model: int,
+        pos_embedding: DictConfig,
+        enc_layer: DictConfig,
+        num_enc_layers: int,
+        layer_drop_prob: float = 0.1,
+        dropout: float = 0.1,
+    ):
+        """
+        The transformer encoder.
+
+        Args:
+            d_model (int): The dimension of the encoder.
+            pos_embedding (DictConfig): The config of the positional embedding.
+            enc_layer (DictConfig): The config of the encoder layer.
+            num_layers (int): The number of encoder layers.
+            layer_drop_prob (float): The probability of dropping the encoder layer.
+        """
+        super().__init__()
+
+        self.pos_conv_embed = RelativePositionalConvEmbedding(d_model, **pos_embedding)
+        self.layer_norm = nn.LayerNorm(d_model)
+        self.dropout = nn.Dropout(dropout)
+        self.layer_drop_prob = layer_drop_prob
+
+        self.layers = nn.ModuleList(
+            EncoderLayer(d_model, **enc_layer) for _ in range(num_enc_layers)
+        )
+
+    def forward(self, x: torch.Tensor, mask: Optional[torch.Tensor] = None):
         """
         Args:
             x (Tensor): The extracted features. Shape: (batch, num_frames, d_model)
@@ -82,53 +116,51 @@ class TranformerEncoder(nn.Module):
         Returns:
             out (Tensor): The output of the transformer encoder. Shape: (batch, num_frames, d_model)
         """
-        super().__init__()
-
-        self.pos_embedding = RelativePositionalEmbedding(**config.pos_embedding)
-        self.layernorm = nn.LayerNorm(config.d_model)
-        self.layer_drop = config.layer_drop
-
-        self.layers = nn.ModuleList(
-            EncoderLayer(**config.layer) for _ in range(config.num_layers)
-        )
-
-    def forward(self, x: torch.Tensor, mask: Optional[torch.Tensor] = None):
-        out = self.pos_embedding(x)
+        pos_embedding = self.pos_conv_embed(x)
+        out = x + pos_embedding
+        out = self.dropout(out)
 
         for layer in self.layers:
-            skip_layer = self.training and torch.rand(1).item() < self.layer_drop
+            # Random dropout probability from a uniform distribution
+            skip_layer = self.training and torch.rand(1).item() < self.layer_drop_prob
 
             if skip_layer:
                 continue
             else:
                 out, _ = layer(out, attention_mask=mask)
 
-        out = self.layernorm(out)
+        out = self.layer_norm(out)
 
         return out
 
 
 class ContextEncoder(nn.Module):
-    def __init__(self, config):
-        """
-        Args:
-            x (Tensor): The extracted features. Shape: (batch, num_frames, in_features)
-            attention_mask (BoolTensor): The mask for the valid frames. `True` is invalid. Shape: (batch, num_frames)
-        """
+    def __init__(
+        self,
+        d_model: int,
+        feature_projection: DictConfig,
+        transformer_encoder: DictConfig,
+    ):
         super().__init__()
 
-        self.feature_projection = FeatureProjection(**config.feature_projection)
-        self.encoder = TranformerEncoder(config.encoder)
-        self.masked_spec_embed = nn.Parameter(
-            torch.FloatTensor(config.feature_projection.out_features).uniform_()
+        self.feature_projection = FeatureProjection(
+            out_features=d_model, **feature_projection
         )
+        self.encoder = TranformerEncoder(d_model=d_model, **transformer_encoder)
+        self.masked_spec_embed = nn.Parameter(torch.FloatTensor(d_model).uniform_())
 
     def forward(
         self,
         x: torch.Tensor,
-        attention_mask: torch.Tensor = None,
-        mask_time_indices: torch.Tensor = None,
+        attention_mask: Optional[torch.Tensor] = None,
+        mask_time_indices: Optional[torch.Tensor] = None,
     ):
+        """
+        Args:
+            x (Tensor): The extracted features. Shape: (batch, num_frames, in_features)
+            attention_mask (Optional[BoolTensor]): The mask for the valid frames. `True` is invalid. Shape: (batch, num_frames)
+            mask_time_indices (Optional[LongTensor]): The indices of the masked frames. Shape: (batch, num_masked_frames)
+        """
         x = self.feature_projection(x)
 
         if mask_time_indices is not None:

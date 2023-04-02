@@ -3,5 +3,3 @@ torchaudio
 pytorch-lightning
 einops
 easydict
-webdataset
-transformers

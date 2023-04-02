@@ -1,17 +1,17 @@
 import torch
 
 
-def init_module_weights(module):
+def init_module_weights(module: torch.nn.Module):
     """Initialize the weights"""
 
-    from src.model.modules import QuantizationModule
+    # from src.model.modules import QuantizationModule
 
-    # gumbel softmax requires special init
-    if isinstance(module, QuantizationModule):
-        module.weight_proj.weight.data.normal_(mean=0.0, std=1)
-        module.weight_proj.bias.data.zero_()
-        torch.nn.init.uniform_(module.codebooks)
-    elif isinstance(module, torch.nn.Linear):
+    # # gumbel softmax requires special init
+    # if isinstance(module, QuantizationModule):
+    #     module.weight_proj.weight.data.normal_(mean=0.0, std=1)
+    #     module.weight_proj.bias.data.zero_()
+    #     torch.nn.init.uniform_(module.codebooks)
+    if isinstance(module, torch.nn.Linear):
         # Slightly different from the TF version which uses truncated_normal for initialization
         # cf https://github.com/pytorch/pytorch/pull/5617
         module.weight.data.normal_(mean=0.0, std=0.5)

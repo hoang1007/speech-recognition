@@ -1,0 +1,66 @@
+model:
+  wav2vec:
+    feature_extractor:
+      in_channels: 1
+      hidden_channels: [512, 512, 512, 512, 512, 512, 512]
+      kernel_sizes: [10, 3, 3, 3, 3, 2, 2]
+      strides: [5, 2, 2, 2, 2, 2, 2]
+    context_encoder:
+      d_model: 768
+      feature_projection:
+        in_features: 512
+        dropout: 0.1
+      transformer_encoder:
+        pos_embedding:
+          kernel_size: 3
+          groups: 2
+        enc_layer:
+          num_heads: 8
+          layer_norm_first: False
+          feed_forward_dim: 2048
+          dropout: 0.1
+        num_enc_layers: 12
+        layer_drop_prob: 0.05
+        dropout: 0.1
+  transcript_tokenizer:
+    pretrained_model_name_or_path: "vinai/phobert-base"
+    max_length: 128
+  optimizer:
+    _target_: torch.optim.AdamW
+    lr: 4e-4
+    weight_decay: 0.001
+  lr_scheduler:
+    scheduler:
+      _target_: torch.optim.lr_scheduler.CosineAnnealingLR
+      T_max: 20
+
+trainer:
+  max_epochs: 20
+  accelerator: gpu
+  precision: 16
+  gradient_clip_val: 1.0
+  callbacks:
+    - _target_: pytorch_lightning.callbacks.ModelCheckpoint
+      monitor: val/wer
+      dirpath: "checkpoints"
+      filename: "{epoch:02d}-{val/wer:.2f}"
+      save_top_k: 3
+      mode: min
+    - _target_: pytorch_lightning.callbacks.EarlyStopping
+      monitor: val/wer
+      patience: 3
+      mode: min
+    - _target_: pytorch_lightning.callbacks.LearningRateMonitor
+      logging_interval: epoch
+      log_momentum: True
+  loggers:
+    - _target_: pytorch_lightning.loggers.wandb.WandbLogger
+      project: "Wav2Vec2"
+      name: "wav2vec2-base-ctc"
+      log_model: True
+
+data:
+  root: data
+  batch_size: 8
+  train_val_ratio: 0.75
+  return_transcript: True

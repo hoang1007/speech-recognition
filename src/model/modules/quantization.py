@@ -7,7 +7,11 @@ import einops
 
 class QuantizationModule(nn.Module):
     def __init__(
-        self, config
+        self,
+        in_features: int,
+        d_model: int,
+        num_codebooks: int,
+        num_codewords: int,
     ):
         """
         Args:
@@ -21,18 +25,18 @@ class QuantizationModule(nn.Module):
         super().__init__()
 
         assert (
-            config.d_model % config.num_codebooks == 0
+            d_model % num_codebooks == 0
         ), "d_model must be divisible by num_codebooks"
 
-        self.num_codebooks = config.num_codebooks
-        self.num_codewords = config.num_codewords
-        self.d_model = config.d_model
-        self.codeword_dim = config.d_model // config.num_codebooks
+        self.num_codebooks = num_codebooks
+        self.num_codewords = num_codewords
+        self.d_model = d_model
+        self.codeword_dim = d_model // num_codebooks
 
         self.codebooks = self._init_codebooks()
 
         self.projection = nn.Linear(
-            config.in_features, self.num_codebooks * self.num_codewords
+            in_features, self.num_codebooks * self.num_codewords
         )
 
         self.tau = 1  # temperature factor

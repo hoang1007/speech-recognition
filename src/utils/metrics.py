@@ -1,8 +1,8 @@
-from typing import Tuple, Union
+from typing import List, Union
 import re
 
 
-def levenshtein_distance(source: Tuple[str], target: Tuple[str]):
+def levenshtein_distance(source: Union[str, List[str]], target: Union[str, List[str]]):
     """
     Compute the Levenshtein distance between two sequences.
     """
@@ -28,22 +28,18 @@ def levenshtein_distance(source: Tuple[str], target: Tuple[str]):
 
     distance = current_row[n]
 
-    del current_row
-    del previous_row
-
     return distance
 
 
 def word_error_rate(
-    predicted: Union[str, Tuple[str]], transcript: Union[str, Tuple[str]]
+    predicted: Union[str, List[str]], transcript: Union[str, List[str]]
 ):
     if isinstance(predicted, str):
-        predicted = (predicted,)
+        predicted = [predicted]
     if isinstance(transcript, str):
-        transcript = (transcript,)
+        transcript = [transcript]
 
     pattern = r"\W+"
-
     err, total = 0, 0
 
     for pred, tgt in zip(predicted, transcript):
@@ -56,12 +52,12 @@ def word_error_rate(
 
 
 def character_error_rate(
-    predicted: Union[str, Tuple[str]], transcript: Union[str, Tuple[str]]
+    predicted: Union[str, List[str]], transcript: Union[str, List[str]]
 ):
     if isinstance(predicted, str):
-        predicted = (predicted,)
+        predicted = [predicted]
     if isinstance(transcript, str):
-        transcript = (transcript,)
+        transcript = [transcript]
 
     err, total = 0, 0
 

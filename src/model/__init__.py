@@ -1,1 +1,3 @@
-from .wav2vec2 import Wav2Vec2PretrainingModule
+from .wav2vec2_pretraining import Wav2Vec2
+from .wav2vec2_ctc import Wav2Vec2ForCTC
+
