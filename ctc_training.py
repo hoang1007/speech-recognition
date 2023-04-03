@@ -11,8 +11,7 @@ from src.utils import instantiate
 
 def parse_args():
     parser = ArgumentParser()
-    parser.add_argument("config", type=str, default="configs/wav2vec2-base-ctc.yaml")
-    parser.add_argument("--device", type=str, default="gpu", choices=["cpu", "gpu"])
+    parser.add_argument("--config", type=str, default="configs/wav2vec2-base-ctc.yaml")
 
     return parser.parse_args()
 
@@ -26,16 +25,26 @@ def main(args):
     datamodule = VLSPDataModule(**config.data)
 
     # Instantiate loggers
-    logger = [instantiate(logger) for logger in config.pop("logger")]
+    if "loggers" in config.trainer:
+        loggers = [instantiate(logger) for logger in config.trainer.pop("loggers")]
+    else:
+        loggers = None
 
     # Instantiate callbacks
-    callbacks = [instantiate(callback) for callback in config.pop("callbacks")]
+    if "callbacks" in config.trainer:
+        callbacks = [instantiate(callback) for callback in config.trainer.pop("callbacks")]
+    else:
+        callbacks = None
 
     # Instantiate trainer
-    trainer = Trainer(logger=logger, callbacks=callbacks, **config.pop("trainer"))
+    trainer = Trainer(logger=loggers, callbacks=callbacks, **config.pop("trainer"))
     
     # Start training!
-    model = torch.compile(model, mode="default")
+    try:
+        model = torch.compile(model, mode="default")
+    except Exception as e:
+        print("Cannot using torch.compile to accelerate training!")
+        print(e)
     trainer.fit(model, datamodule=datamodule)
 
 if __name__ == "__main__":

@@ -4,8 +4,8 @@ import importlib
 
 
 def instantiate(config: DictConfig, partial: bool = False, reload: bool = False):
-    target_key = "__target__"
-    # partial_key = "__partial__"
+    target_key = "_target_"
+    # partial_key = "_partial_"
 
     if target_key not in config:
         raise ValueError("Missing {} in config: {}".format(target_key, config))

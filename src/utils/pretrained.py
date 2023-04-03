@@ -7,6 +7,7 @@ def load_pretrained_model(model: Module):
     Mapping weights from LeBinh's Wav2Vec2 pretrained model to model in this repo.
     The pretrained model can be found here: https://huggingface.co/nguyenvulebinh/wav2vec2-base-vietnamese-250h
     """
+    print("Loading pretrained weights...")
     pretrained_url = "https://huggingface.co/nguyenvulebinh/wav2vec2-base-vietnamese-250h/resolve/main/pytorch_model.bin"
     ckpt = load_state_dict_from_url(pretrained_url, map_location="cpu")
     

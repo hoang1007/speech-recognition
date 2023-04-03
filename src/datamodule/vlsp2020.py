@@ -76,7 +76,7 @@ class VLSP2020Dataset(Dataset):
         audio, sample_rate = torchaudio.load(audio)
         audio = F.resample(audio, sample_rate, self.sample_rate)
 
-        return audio, transcript, self.sample_rate
+        return audio, transcript
 
 
 class VLSP2020TarDataset:
@@ -84,9 +84,10 @@ class VLSP2020TarDataset:
         self.outpath = outpath
 
     def convert(self, dataset: VLSP2020Dataset):
+        assert webdataset is not None, "WebDataset is not installed."
         writer = webdataset.TarWriter(self.outpath)
 
-        for idx, (transcript, audio) in enumerate(tqdm(dataset, colour="green")):
+        for idx, (audio, transcript) in enumerate(tqdm(dataset, colour="green")):
             writer.write(
                 {
                     "__key__": f"{idx:08d}",
@@ -97,7 +98,8 @@ class VLSP2020TarDataset:
 
         writer.close()
 
-    def load(self) -> webdataset.WebDataset:
+    def load(self):
+        assert webdataset is not None, "WebDataset is not installed."
         self.data = (
             webdataset.WebDataset(self.outpath)
             .decode(
@@ -109,45 +111,6 @@ class VLSP2020TarDataset:
 
         return self.data
 
-
-def get_dataloader(
-    dataset: Union[VLSP2020Dataset, webdataset.WebDataset],
-    return_transcript: bool = False,
-    transform: Optional[Callable] = None,
-    target_transform: Optional[Callable] = None,
-    **kwargs
-):
-    def collate_fn(batch):
-        def get_audio(item):
-            audio = item[0]
-            sample_rate = item[2]
-
-            if transform is not None:
-                audio = transform(audio, sample_rate)
-
-            assert (
-                isinstance(audio, torch.Tensor)
-                and audio.ndim == 2
-                and audio.size(0) == 1
-            )
-
-            return audio.squeeze(0)
-
-        audio = tuple(get_audio(item) for item in batch)
-
-        if return_transcript:
-            if target_transform is not None:
-                transcript = tuple(target_transform(item[0]) for item in batch)
-            else:
-                transcript = tuple(item[1] for item in batch)
-
-            return audio, transcript
-        else:
-            return audio
-
-    return DataLoader(
-        dataset, collate_fn=collate_fn, **kwargs
-    )
 
 class VLSPDataModule(LightningDataModule):
     def __init__(
@@ -187,6 +150,45 @@ class VLSPDataModule(LightningDataModule):
         num_validation_samples = metadata["vlsp2020"]["num_samples"] - num_training_samples
         self.train_data, self.val_data = random_split(dataset, [num_training_samples, num_validation_samples])
 
+    def get_dataloader(
+        self,
+        dataset,
+        return_transcript: bool = False,
+        transform: Optional[Callable] = None,
+        target_transform: Optional[Callable] = None,
+        **kwargs
+    ):
+        def collate_fn(batch):
+            def get_audio(item):
+                audio = item[0]
+
+                if transform is not None:
+                    audio = transform(audio, self.sample_rate)
+
+                assert (
+                    isinstance(audio, torch.Tensor)
+                    and audio.ndim == 2
+                    and audio.size(0) == 1
+                )
+
+                return audio.squeeze(0)
+
+            audio = tuple(get_audio(item) for item in batch)
+
+            if return_transcript:
+                if target_transform is not None:
+                    transcript = tuple(target_transform(item[0]) for item in batch)
+                else:
+                    transcript = tuple(item[1] for item in batch)
+
+                return audio, transcript
+            else:
+                return audio
+
+        return DataLoader(
+            dataset, collate_fn=collate_fn, **kwargs
+        )
+
     def train_dataloader(self):
         transform = T.Compose([
             T.Gain(min_gain_in_db=-5.0, max_gain_in_db=5.0, p=0.5),
@@ -195,7 +197,7 @@ class VLSPDataModule(LightningDataModule):
         ])
         target_transform = lambda text: text.translate(str.maketrans("", "", string.punctuation)).lower()
 
-        return get_dataloader(
+        return self.get_dataloader(
             self.train_data,
             self.return_transcript,
             transform=transform,
@@ -208,7 +210,7 @@ class VLSPDataModule(LightningDataModule):
     def val_dataloader(self):
         target_transform = lambda text: text.translate(str.maketrans("", "", string.punctuation)).lower()
 
-        return get_dataloader(
+        return self.get_dataloader(
             self.val_data,
             self.return_transcript,
             target_transform=target_transform,

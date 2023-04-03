@@ -38,9 +38,7 @@ class FeatureProjection(nn.Module):
 
 
 class RelativePositionalConvEmbedding(nn.Module):
-    def __init__(
-        self, d_model: int, kernel_size: int, groups: int
-    ):
+    def __init__(self, d_model: int, kernel_size: int, groups: int):
         super().__init__()
 
         self.conv = nn.Conv1d(
@@ -50,7 +48,8 @@ class RelativePositionalConvEmbedding(nn.Module):
             padding=kernel_size // 2,
             groups=groups,
         )
-        self.conv = nn.utils.weight_norm(self.conv, name="weight", dim=2) # type: ignore
+        self.conv = nn.utils.weight_norm(self.conv, name="weight", dim=2)  # type: ignore
+        self.activation = nn.GELU()
         self.num_remove = 1 if kernel_size % 2 == 0 else 0
 
     def forward(self, x: torch.Tensor):
@@ -68,7 +67,7 @@ class RelativePositionalConvEmbedding(nn.Module):
         if self.num_remove > 0:
             out = out[..., : -self.num_remove]
 
-        out = F.gelu(out)
+        out = self.activation(out)
 
         # (batch, num_frames, channels=d_model)
         out = out.transpose_(1, 2)
@@ -85,6 +84,7 @@ class TranformerEncoder(nn.Module):
         num_enc_layers: int,
         layer_drop_prob: float = 0.1,
         dropout: float = 0.1,
+        stable_layer_norm: bool = False,
     ):
         """
         The transformer encoder.
@@ -102,6 +102,7 @@ class TranformerEncoder(nn.Module):
         self.layer_norm = nn.LayerNorm(d_model)
         self.dropout = nn.Dropout(dropout)
         self.layer_drop_prob = layer_drop_prob
+        self.stable_layer_norm = stable_layer_norm
 
         self.layers = nn.ModuleList(
             EncoderLayer(d_model, **enc_layer) for _ in range(num_enc_layers)
@@ -118,6 +119,8 @@ class TranformerEncoder(nn.Module):
         """
         pos_embedding = self.pos_conv_embed(x)
         out = x + pos_embedding
+        if not self.stable_layer_norm:
+            out = self.layer_norm(out)
         out = self.dropout(out)
 
         for layer in self.layers:
@@ -129,7 +132,8 @@ class TranformerEncoder(nn.Module):
             else:
                 out, _ = layer(out, attention_mask=mask)
 
-        out = self.layer_norm(out)
+        if self.stable_layer_norm:
+            out = self.layer_norm(out)
 
         return out
 
@@ -171,10 +175,13 @@ class ContextEncoder(nn.Module):
 
             attention_mask = attention_mask[:, None, None, :]
             # (batch, 1, num_frames, num_frames)
-            # mask = mask[:, None, None, :].repeat(1, 1, mask.size(1), 1) # TODO: check this
-            attention_mask = (
-                torch.maximum(attention_mask, attention_mask.transpose(2, 3)) * -1e6
+            attention_mask = (attention_mask * torch.finfo(x.dtype).min).repeat(
+                1, 1, attention_mask.size(1), 1
             )
+            # TODO: check this
+            # attention_mask = (
+            #     torch.maximum(attention_mask, attention_mask.transpose(2, 3)) * -1e6
+            # )
 
         x = self.encoder(x, mask=attention_mask)
 

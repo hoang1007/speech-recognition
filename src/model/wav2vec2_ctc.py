@@ -24,7 +24,7 @@ class Wav2Vec2ForCTC(LightningModule):
             transcript_tokenizer: DictConfig,
             optimizer: DictConfig,
             lr_scheduler: Optional[DictConfig] = None,
-            pretrain: bool = False):
+            pretrain_encoder: bool = False):
         super().__init__()
 
         self.save_hyperparameters(logger=False)
@@ -34,8 +34,12 @@ class Wav2Vec2ForCTC(LightningModule):
         self.optimizer = optimizer
         self.lr_scheduler = lr_scheduler
 
-        if pretrain:
+        self.is_encoder_pretrained = pretrain_encoder
+
+        if self.is_encoder_pretrained:
             self.wav2vec = load_pretrained_model(self.wav2vec) # type: ignore
+            self.wav2vec.freeze()
+            self.wav2vec.eval()
         
         hidden_size = self.get_embedding_dim()
         vocab_size = self.transcript_tokenizer.vocab_size # type: ignore
@@ -49,7 +53,7 @@ class Wav2Vec2ForCTC(LightningModule):
         assert self.transcript_tokenizer.pad_token_id is not None
         self.criterion = nn.CTCLoss(
             blank=self.transcript_tokenizer.pad_token_id,
-            zero_infinity=True)
+            zero_infinity=False)
         
         self.train_loss = MeanMetric()
 
@@ -72,6 +76,7 @@ class Wav2Vec2ForCTC(LightningModule):
                 padding=True,
                 return_length=True,
                 return_attention_mask=False,
+                return_token_type_ids=False,
                 return_tensors="pt",
             ).values()
 
@@ -137,11 +142,12 @@ class Wav2Vec2ForCTC(LightningModule):
 
     def configure_optimizers(self):
         params = [
-            {"params": self.wav2vec.parameters(), "lr": self.optimizer.lr * 0.1},
             {"params": self.fc.parameters(), "lr": self.optimizer.lr},
         ]
-        optimizer = instantiate(self.optimizer, partial=True)(params)
+        if not self.is_encoder_pretrained:
+            params.append({"params": self.wav2vec.parameters(), "lr": self.optimizer.lr})
 
+        optimizer = instantiate(self.optimizer, partial=True)(params)
         if self.lr_scheduler is not None:
                 assert "scheduler" in self.lr_scheduler, "Please specify the scheduler."
                 scheduler = instantiate(self.lr_scheduler.pop("scheduler"), partial=True)(

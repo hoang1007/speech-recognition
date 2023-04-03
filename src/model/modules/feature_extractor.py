@@ -59,6 +59,8 @@ class Conv1DBlock(nn.Module):
             raise ValueError(
                 f"norm_type must be one of 'none', 'layer', 'group'. Got {norm_type}"
             )
+        
+        self.activation = nn.GELU()
 
     def forward(self, x: torch.Tensor, length: torch.Tensor):
         """
@@ -73,7 +75,7 @@ class Conv1DBlock(nn.Module):
 
         x = self.conv(x)
         x = self.layer_norm(x)
-        x = F.gelu(x)
+        x = self.activation(x)
 
         length = (
             torch.div(length - self.kernel_size, self.stride, rounding_mode="floor") + 1

@@ -11,12 +11,12 @@ model:
       dropout: 0.1
     transformer_encoder:
       pos_embedding:
-        kernel_size: 3
-        groups: 2
+        kernel_size: 128
+        groups: 16
       enc_layer:
-        num_heads: 8
+        num_heads: 12
         layer_norm_first: False
-        feed_forward_dim: 2048
+        feed_forward_dim: 3072
         dropout: 0.1
       num_enc_layers: 12
       layer_drop_prob: 0.05
