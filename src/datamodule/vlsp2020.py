@@ -7,7 +7,7 @@ import string
 import torch
 import torchaudio
 import torchaudio.functional as F
-from torch.utils.data import Dataset, DataLoader, IterableDataset, random_split
+from torch.utils.data import Dataset, DataLoader, random_split
 import torch_audiomentations as T
 
 from pytorch_lightning import LightningDataModule
@@ -163,7 +163,7 @@ class VLSPDataModule(LightningDataModule):
                 audio = item[0]
 
                 if transform is not None:
-                    audio = transform(audio, self.sample_rate)
+                    audio = transform(audio.unsqueeze(0), self.sample_rate)[0]
 
                 assert (
                     isinstance(audio, torch.Tensor)
@@ -171,7 +171,7 @@ class VLSPDataModule(LightningDataModule):
                     and audio.size(0) == 1
                 )
 
-                return audio.squeeze(0)
+                return audio
 
             audio = tuple(get_audio(item) for item in batch)
 

@@ -58,7 +58,7 @@ class Wav2Vec2ForCTC(LightningModule):
         self.train_loss = MeanMetric()
 
     def get_embedding_dim(self):
-        dummy_input = torch.randn(16000)
+        dummy_input = [torch.randn(1, 1600)]
         embedding_dim = int(self.wav2vec(dummy_input).size(-1))
         return embedding_dim
     

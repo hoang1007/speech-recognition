@@ -20,11 +20,12 @@ class Wav2Vec2Processor(nn.Module):
             wave_lengths (torch.Tensor): The wave length of each waveform. Shape: (batch_size,).
         """
         for waveform in waveforms:
-            assert waveform.dim() == 1, "waveform must be 1D tensor"
+            assert waveform.ndim == 2, "waveform must be 2D tensor"
+            assert waveform.size(0) == 1, "Only support mono waveform"
 
         device = waveforms[0].device
         wave_lengths = torch.tensor(
-            tuple(waveform.size(0) for waveform in waveforms), device=device
+            tuple(waveform.size(1) for waveform in waveforms), device=device
         )
 
         max_length = int(wave_lengths.max().item())
@@ -35,12 +36,12 @@ class Wav2Vec2Processor(nn.Module):
             padded.append(
                 nn.functional.pad(
                     waveform,
-                    (0, max_length - waveform.size(0)),
+                    (0, max_length - waveform.size(1)),
                     mode="constant",
                     value=0.0,
                 )
             )
 
-        batched_waveforms = torch.stack(padded, dim=0)
+        batched_waveforms = torch.cat(padded, dim=0)
 
         return batched_waveforms, wave_lengths
